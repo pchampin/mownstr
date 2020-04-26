@@ -1,0 +1,10 @@
+[package]
+name = "mownstr"
+description = "Maybe Owned String"
+version = "0.1.0"
+authors = ["Pierre-Antoine Champin <pchampin@liris.cnrs.fr>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
