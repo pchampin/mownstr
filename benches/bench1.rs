@@ -1,3 +1,10 @@
+//! This benchmark is used to compare the time it takes to create
+//! * borrowing MownStr's vs. standard &str references
+//! * owning MownStr's vs. Strings
+//!
+//! The resruls of `borrowed_mownstr` should therefore be compared to `refs`,
+//! and that of `owned_mownstr` should be compared to `strings`.
+
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use mownstr::MownStr;
 

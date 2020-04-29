@@ -5,29 +5,76 @@ use std::borrow::Cow;
 use std::fmt;
 use std::hash;
 use std::ops::Deref;
+use std::slice;
+use std::str;
 
 /// "Maybe own str":Option
 /// either a borrowed reference to a `str` or an own `Box<str>`.
 ///
 /// It does not try to be mutable, nor generic,
 /// which makes it lighter than, for example, `Cow<str>`.
-#[derive(Clone)]
-pub enum MownStr<'a> {
-    /// Variant simply borrowing `str`
-    Ref(&'a str),
-    /// Variant owning `str` into a box
-    Own(Box<str>),
-}
+pub struct MownStr<'a>(&'a str);
 
-use MownStr::*;
+const LEN_MASK: usize = usize::MAX >> 1;
+const OWN_FLAG: usize = !LEN_MASK;
 
 impl<'a> MownStr<'a> {
     pub fn is_borrowed(&self) -> bool {
-        matches!(self, Ref(_))
+        (self.0.len() & OWN_FLAG) == 0
     }
 
     pub fn is_owned(&self) -> bool {
-        matches!(self, Own(_))
+        (self.0.len() & OWN_FLAG) == OWN_FLAG
+    }
+
+    #[inline]
+    fn real_len(&self) -> usize {
+        self.0.len() & LEN_MASK
+    }
+
+    #[inline]
+    unsafe fn into_ref(self) -> &'a str {
+        debug_assert!(self.is_borrowed(), "into_ref() called on owned MownStr");
+        let ptr = self.0.as_ptr();
+        let len = self.real_len();
+        let slice = slice::from_raw_parts(ptr, len);
+        str::from_utf8_unchecked(slice)
+    }
+
+    #[inline]
+    unsafe fn to_box(&mut self) -> Box<str> {
+        debug_assert!(self.is_owned(), "to_box() called on borrowed MownStr");
+        // extract data to make box
+        let mut_ref: &mut str = &mut *(self.0 as *const str as *mut str);
+        let ptr = mut_ref.as_mut_ptr();
+        let len = self.real_len();
+        // clean fields to avoid double free
+        self.0 = "";
+        debug_assert!(self.is_borrowed());
+        // make box
+        let slice = slice::from_raw_parts_mut(ptr, len);
+        let raw = str::from_utf8_unchecked_mut(slice) as *mut str;
+        Box::from_raw(raw)
+    }
+}
+
+impl<'a> Drop for MownStr<'a> {
+    fn drop(&mut self) {
+        if self.is_owned() {
+            unsafe {
+                std::mem::drop(self.to_box());
+            }
+        }
+    }
+}
+
+impl<'a> Clone for MownStr<'a> {
+    fn clone(&self) -> MownStr<'a> {
+        if self.is_owned() {
+            Box::<str>::from(self.deref()).into()
+        } else {
+            MownStr(self.0)
+        }
     }
 }
 
@@ -35,27 +82,48 @@ impl<'a> MownStr<'a> {
 
 impl<'a> From<&'a str> for MownStr<'a> {
     fn from(other: &'a str) -> MownStr<'a> {
-        Ref(other)
+        let ptr = other.as_ptr();
+        let len = other.len();
+
+        #[cfg(feature = "paranoid")]
+        assert!(len <= LEN_MASK);
+
+        let my_ref = unsafe {
+            let slice = slice::from_raw_parts(ptr, len & LEN_MASK);
+            str::from_utf8_unchecked(slice)
+        };
+        MownStr(my_ref)
     }
 }
 
 impl<'a> From<Box<str>> for MownStr<'a> {
     fn from(other: Box<str>) -> MownStr<'a> {
-        Own(other)
+        let ptr = other.as_ptr();
+        let len = other.len();
+        std::mem::forget(other);
+
+        #[cfg(feature = "paranoid")]
+        assert!(len <= LEN_MASK);
+
+        let my_ref = unsafe {
+            let slice = slice::from_raw_parts(ptr, len | OWN_FLAG);
+            str::from_utf8_unchecked(slice)
+        };
+        MownStr(my_ref)
     }
 }
 
 impl<'a> From<String> for MownStr<'a> {
     fn from(other: String) -> MownStr<'a> {
-        Own(other.into())
+        other.into_boxed_str().into()
     }
 }
 
 impl<'a> From<Cow<'a, str>> for MownStr<'a> {
     fn from(other: Cow<'a, str>) -> MownStr<'a> {
         match other {
-            Cow::Borrowed(r) => Ref(r),
-            Cow::Owned(s) => Own(s.into()),
+            Cow::Borrowed(r) => r.into(),
+            Cow::Owned(s) => s.into(),
         }
     }
 }
@@ -64,10 +132,13 @@ impl<'a> From<Cow<'a, str>> for MownStr<'a> {
 
 impl<'a> Deref for MownStr<'a> {
     type Target = str;
+
     fn deref(&self) -> &str {
-        match self {
-            Ref(r) => r,
-            Own(b) => &b,
+        let ptr = self.0.as_ptr();
+        let len = self.real_len();
+        unsafe {
+            let slice = slice::from_raw_parts(ptr, len);
+            str::from_utf8_unchecked(slice)
         }
     }
 }
@@ -156,27 +227,22 @@ impl<'a> fmt::Display for MownStr<'a> {
 
 impl<'a> From<MownStr<'a>> for Box<str> {
     fn from(other: MownStr<'a>) -> Box<str> {
-        match other {
-            Ref(r) => Box::from(r),
-            Own(b) => b,
-        }
+        other.to()
     }
 }
 
 impl<'a> From<MownStr<'a>> for String {
     fn from(other: MownStr<'a>) -> String {
-        match other {
-            Ref(r) => String::from(r),
-            Own(b) => b.into(),
-        }
+        other.to()
     }
 }
 
 impl<'a> From<MownStr<'a>> for Cow<'a, str> {
     fn from(other: MownStr<'a>) -> Cow<'a, str> {
-        match other {
-            Ref(r) => Cow::Borrowed(r),
-            Own(b) => Cow::Owned(b.into()),
+        if other.is_owned() {
+            other.to::<String>().into()
+        } else {
+            unsafe { other.into_ref() }.into()
         }
     }
 }
@@ -198,13 +264,14 @@ impl<'a> MownStr<'a> {
     /// let o1 = Some(MownStr::from("hi there"));
     /// let o2 = o1.map(MownStr::to::<Rc<str>>);
     /// ```
-    pub fn to<T>(self) -> T
+    pub fn to<T>(mut self) -> T
     where
         T: From<&'a str> + From<Box<str>>,
     {
-        match self {
-            Ref(r) => T::from(r),
-            Own(b) => T::from(b),
+        if self.is_owned() {
+            unsafe { self.to_box() }.into()
+        } else {
+            unsafe { self.into_ref() }.into()
         }
     }
 }

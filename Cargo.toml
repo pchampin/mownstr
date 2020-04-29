@@ -9,6 +9,10 @@ edition = "2018"
 
 [dependencies]
 
+[features]
+default = []
+paranoid = []
+
 [dev-dependencies]
 criterion = "0.3"
 
