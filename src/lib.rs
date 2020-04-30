@@ -13,6 +13,11 @@ use std::str;
 ///
 /// It does not try to be mutable, nor generic,
 /// which makes it lighter than, for example, `Cow<str>`.
+///
+/// # Panic
+/// The drawback is that `MownStr`
+/// does not support strings with a length > `usize::MAX/2`.
+/// Trying to convert such a large string to a `MownStr` will panic.
 pub struct MownStr<'a>(&'a str);
 
 const LEN_MASK: usize = usize::MAX >> 1;
@@ -42,15 +47,13 @@ impl<'a> MownStr<'a> {
     }
 
     #[inline]
-    unsafe fn to_box(&mut self) -> Box<str> {
+    unsafe fn as_box(&mut self) -> Box<str> {
         debug_assert!(self.is_owned(), "to_box() called on borrowed MownStr");
         // extract data to make box
+        #[allow(clippy::cast_ref_to_mut)]
         let mut_ref: &mut str = &mut *(self.0 as *const str as *mut str);
         let ptr = mut_ref.as_mut_ptr();
         let len = self.real_len();
-        // clean fields to avoid double free
-        self.0 = "";
-        debug_assert!(self.is_borrowed());
         // make box
         let slice = slice::from_raw_parts_mut(ptr, len);
         let raw = str::from_utf8_unchecked_mut(slice) as *mut str;
@@ -62,7 +65,7 @@ impl<'a> Drop for MownStr<'a> {
     fn drop(&mut self) {
         if self.is_owned() {
             unsafe {
-                std::mem::drop(self.to_box());
+                std::mem::drop(self.as_box());
             }
         }
     }
@@ -82,11 +85,9 @@ impl<'a> Clone for MownStr<'a> {
 
 impl<'a> From<&'a str> for MownStr<'a> {
     fn from(other: &'a str) -> MownStr<'a> {
-        let ptr = other.as_ptr();
         let len = other.len();
-
-        #[cfg(feature = "paranoid")]
         assert!(len <= LEN_MASK);
+        let ptr = other.as_ptr();
 
         let my_ref = unsafe {
             let slice = slice::from_raw_parts(ptr, len & LEN_MASK);
@@ -98,12 +99,11 @@ impl<'a> From<&'a str> for MownStr<'a> {
 
 impl<'a> From<Box<str>> for MownStr<'a> {
     fn from(other: Box<str>) -> MownStr<'a> {
-        let ptr = other.as_ptr();
         let len = other.len();
-        std::mem::forget(other);
-
-        #[cfg(feature = "paranoid")]
         assert!(len <= LEN_MASK);
+        let ptr = other.as_ptr();
+
+        std::mem::forget(other);
 
         let my_ref = unsafe {
             let slice = slice::from_raw_parts(ptr, len | OWN_FLAG);
@@ -269,7 +269,7 @@ impl<'a> MownStr<'a> {
         T: From<&'a str> + From<Box<str>>,
     {
         if self.is_owned() {
-            unsafe { self.to_box() }.into()
+            unsafe { self.as_box() }.into()
         } else {
             unsafe { self.into_ref() }.into()
         }
