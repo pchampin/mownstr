@@ -4,6 +4,11 @@ description = "Maybe Owned String"
 version = "0.1.0"
 authors = ["Pierre-Antoine Champin <pchampin@liris.cnrs.fr>"]
 edition = "2018"
+repository = "https://github.com/pchampin/mownstr"
+documentation = "https://docs.rs/mownstr"
+readme = "./README.md"
+license = "CECILL-B"
+keywords = ["string", "wrapper", "semantic-web"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

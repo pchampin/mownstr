@@ -16,7 +16,7 @@ fn main() {
     let m0 = get_vmsize();
     println!("{} MB", m0 / 1000);
     let mut v = vec![MownStr::from("hello")];
-    for _ in 1..10 {
+    for _ in 1..5 {
         v.pop(); //comment this line to simulate a memory leak
         let mut s = String::with_capacity(CAP);
         for _ in 0..CAP / 10 {
@@ -38,7 +38,6 @@ fn main() {
     } else {
         println!("MEMORY LEAK; DROP IMPLEMENTATION OF MOWN_STR IS FAULTY");
     }
-    println!("Len: {}", v.len());
 }
 
 fn get_vmsize() -> usize {
