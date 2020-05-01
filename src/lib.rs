@@ -284,6 +284,8 @@ mod test {
     use super::MownStr;
     use std::borrow::Cow;
     use std::collections::HashSet;
+    use std::fs;
+    use std::str::FromStr;
 
     #[test]
     fn test_build_borrowed() {
@@ -396,5 +398,47 @@ mod test {
             mown.to::<Box<str>>()
         };
         assert_eq!(&bx[..4], "hell");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn no_memory_leak() {
+        // performs several MownStr allocation in sequence,
+        // droping each one before allocating the next one
+        // (unless the v.pop() line below is commented out).
+        //
+        // If there is no memory leak,
+        // the increase in vmsize should be roughly 1 time the allocated size;
+        // otherwise, it should be at least 3 times that size.
+
+        let m0 = get_vmsize();
+        println!("vmsize = {} MB", m0 / 1000);
+        let mut v = vec![];
+        for _ in 1..=10 {
+            v.pop(); // COMMENT THIS LINE OUT to simulate a memory leak
+            let s = unsafe { String::from_utf8_unchecked(vec!['x' as u8; CAP]) };
+            v.push(MownStr::from(s));
+            println!(
+                "{} MownStrs in the Vec, of len {}, starting with {:?}",
+                v.len(),
+                v[v.len() - 1].len(),
+                &v[v.len() - 1][..2]
+            );
+        }
+        let m1 = get_vmsize();
+        println!("vmsize = {} MB", m1 / 1000);
+        assert!(v.len() > 0); // ensure that v is not optimized away to soon
+        let increase = (m1 - m0) as f64 / (CAP / 1000) as f64;
+        assert!(increase < 3.0);
+    }
+
+    const CAP: usize = 100_000_000;
+
+    fn get_vmsize() -> usize {
+        let txt = fs::read_to_string("/proc/self/status").expect("read proc status");
+        let txt = txt.split("VmSize:").skip(1).next().unwrap();
+        let txt = txt.split(" kB").next().unwrap();
+        let txt = txt.trim();
+        usize::from_str(txt).unwrap()
     }
 }
