@@ -47,13 +47,16 @@ impl<'a> MownStr<'a> {
     }
 
     #[inline]
-    unsafe fn as_box(&mut self) -> Box<str> {
-        debug_assert!(self.is_owned(), "to_box() called on borrowed MownStr");
+    unsafe fn extract_box(&mut self) -> Box<str> {
+        debug_assert!(self.is_owned(), "extract_box() called on borrowed MownStr");
         // extract data to make box
         #[allow(clippy::cast_ref_to_mut)]
         let mut_ref: &mut str = &mut *(self.0 as *const str as *mut str);
         let ptr = mut_ref.as_mut_ptr();
         let len = self.real_len();
+        // turn to borrowed, to avoid double-free
+        self.0 = "";
+        debug_assert!(self.is_borrowed());
         // make box
         let slice = slice::from_raw_parts_mut(ptr, len);
         let raw = str::from_utf8_unchecked_mut(slice) as *mut str;
@@ -65,7 +68,7 @@ impl<'a> Drop for MownStr<'a> {
     fn drop(&mut self) {
         if self.is_owned() {
             unsafe {
-                std::mem::drop(self.as_box());
+                std::mem::drop(self.extract_box());
             }
         }
     }
@@ -269,7 +272,7 @@ impl<'a> MownStr<'a> {
         T: From<&'a str> + From<Box<str>>,
     {
         if self.is_owned() {
-            unsafe { self.as_box() }.into()
+            unsafe { self.extract_box() }.into()
         } else {
             unsafe { self.into_ref() }.into()
         }
@@ -383,5 +386,15 @@ mod test {
         assert_eq!(format!("{:?}", mown2), "\"hello\"");
         assert_eq!(format!("{}", mown1), "hello");
         assert_eq!(format!("{}", mown2), "hello");
+    }
+
+    #[test]
+    fn no_double_free() {
+        let bx = {
+            let mown = MownStr::from("hello world".to_string());
+            assert_eq!(&mown[..4], "hell");
+            mown.to::<Box<str>>()
+        };
+        assert_eq!(&bx[..4], "hell");
     }
 }
