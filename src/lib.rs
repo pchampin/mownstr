@@ -20,7 +20,7 @@ use std::str;
 /// Trying to convert such a large string to a `MownStr` will panic.
 pub struct MownStr<'a>(&'a str);
 
-const LEN_MASK: usize = usize::MAX >> 1;
+const LEN_MASK: usize = std::usize::MAX >> 1;
 const OWN_FLAG: usize = !LEN_MASK;
 
 impl<'a> MownStr<'a> {
