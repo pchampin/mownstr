@@ -4,6 +4,7 @@
 use std::borrow::Cow;
 use std::fmt;
 use std::hash;
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::slice;
 use std::str;
@@ -18,23 +19,34 @@ use std::str;
 /// The drawback is that `MownStr`
 /// does not support strings with a length > `usize::MAX/2`.
 /// Trying to convert such a large string to a `MownStr` will panic.
-pub struct MownStr<'a>(&'a str);
+pub struct MownStr<'a> {
+    ptr: *const u8,
+    len: usize,
+    _ph: PhantomData<&'a str>,
+}
 
 const LEN_MASK: usize = usize::MAX >> 1;
 const OWN_FLAG: usize = !LEN_MASK;
 
 impl<'a> MownStr<'a> {
     pub fn is_borrowed(&self) -> bool {
-        (self.0.len() & OWN_FLAG) == 0
+        (self.len & OWN_FLAG) == 0
     }
 
     pub fn is_owned(&self) -> bool {
-        (self.0.len() & OWN_FLAG) == OWN_FLAG
+        (self.len & OWN_FLAG) == OWN_FLAG
     }
 
     #[inline]
     fn real_len(&self) -> usize {
-        self.0.len() & LEN_MASK
+        self.len & LEN_MASK
+    }
+
+    #[inline]
+    unsafe fn make_ref(&self) -> &'a str {
+        debug_assert!(self.is_borrowed(), "make_ref() called on owned MownStr");
+        let slice = slice::from_raw_parts(self.ptr, self.len);
+        str::from_utf8_unchecked(slice)
     }
 
     /// Convert an *owned* MownStr to a box.
@@ -46,12 +58,10 @@ impl<'a> MownStr<'a> {
     unsafe fn extract_box(&mut self) -> Box<str> {
         debug_assert!(self.is_owned(), "extract_box() called on borrowed MownStr");
         // extract data to make box
-        #[allow(clippy::cast_ref_to_mut)]
-        let mut_ref: &mut str = &mut *(self.0 as *const str as *mut str);
-        let ptr = mut_ref.as_mut_ptr();
+        let ptr = self.ptr as *mut u8;
         let len = self.real_len();
         // turn to borrowed, to avoid double-free
-        self.0 = "";
+        self.len = 0;
         debug_assert!(self.is_borrowed());
         // make box
         let slice = slice::from_raw_parts_mut(ptr, len);
@@ -75,7 +85,11 @@ impl<'a> Clone for MownStr<'a> {
         if self.is_owned() {
             Box::<str>::from(self.deref()).into()
         } else {
-            MownStr(self.0)
+            MownStr {
+                ptr: self.ptr,
+                len: self.len,
+                _ph: self._ph,
+            }
         }
     }
 }
@@ -85,7 +99,11 @@ impl<'a> Clone for MownStr<'a> {
 impl<'a> From<&'a str> for MownStr<'a> {
     fn from(other: &'a str) -> MownStr<'a> {
         assert!(other.len() <= LEN_MASK);
-        MownStr(other)
+        MownStr {
+            ptr: other.as_bytes().as_ptr(),
+            len: other.len(),
+            _ph: PhantomData,
+        }
     }
 }
 
@@ -93,15 +111,13 @@ impl<'a> From<Box<str>> for MownStr<'a> {
     fn from(other: Box<str>) -> MownStr<'a> {
         let len = other.len();
         assert!(len <= LEN_MASK);
-        let ptr = other.as_ptr();
+        let ptr = other.as_bytes().as_ptr();
 
         std::mem::forget(other);
 
-        let my_ref = unsafe {
-            let slice = slice::from_raw_parts(ptr, len | OWN_FLAG);
-            str::from_utf8_unchecked(slice)
-        };
-        MownStr(my_ref)
+        let len = len | OWN_FLAG;
+        let _ph = PhantomData;
+        MownStr { ptr, len, _ph }
     }
 }
 
@@ -126,7 +142,7 @@ impl<'a> Deref for MownStr<'a> {
     type Target = str;
 
     fn deref(&self) -> &str {
-        let ptr = self.0.as_ptr();
+        let ptr = self.ptr;
         let len = self.real_len();
         unsafe {
             let slice = slice::from_raw_parts(ptr, len);
@@ -234,7 +250,7 @@ impl<'a> From<MownStr<'a>> for Cow<'a, str> {
         if other.is_owned() {
             other.to::<String>().into()
         } else {
-            other.0.into()
+            unsafe { other.make_ref() }.into()
         }
     }
 }
@@ -263,7 +279,7 @@ impl<'a> MownStr<'a> {
         if self.is_owned() {
             unsafe { self.extract_box() }.into()
         } else {
-            self.0.into()
+            unsafe { self.make_ref() }.into()
         }
     }
 }
@@ -275,6 +291,14 @@ mod test {
     use std::collections::HashSet;
     use std::fs;
     use std::str::FromStr;
+
+    #[test]
+    fn size() {
+        assert_eq!(
+            std::mem::size_of::<MownStr<'static>>(),
+            std::mem::size_of::<&'static str>(),
+        );
+    }
 
     #[test]
     fn test_build_borrowed() {
@@ -418,6 +442,7 @@ mod test {
         println!("vmsize = {} MB", m1 / 1000);
         assert!(v.len() > 0); // ensure that v is not optimized away to soon
         let increase = (m1 - m0) as f64 / (CAP / 1000) as f64;
+        println!("increase = {}", increase);
         assert!(increase < 3.0);
     }
 
