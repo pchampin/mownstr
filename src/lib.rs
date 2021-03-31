@@ -1,4 +1,4 @@
-//! [`MownStr`](./enum.MownStr.html)
+//! [`MownStr`]
 //! is either a borrowed reference to a `str` or an own `Box<str>`.
 
 use std::borrow::Cow;
@@ -8,8 +8,8 @@ use std::ops::Deref;
 use std::slice;
 use std::str;
 
-/// "Maybe own str":Option
-/// either a borrowed reference to a `str` or an own `Box<str>`.
+/// "Maybe own str":
+/// either a borrowed reference to a `str` or an owned `Box<str>`.
 ///
 /// It does not try to be mutable, nor generic,
 /// which makes it lighter than, for example, `Cow<str>`.
@@ -37,15 +37,11 @@ impl<'a> MownStr<'a> {
         self.0.len() & LEN_MASK
     }
 
-    #[inline]
-    unsafe fn into_ref(self) -> &'a str {
-        debug_assert!(self.is_borrowed(), "into_ref() called on owned MownStr");
-        let ptr = self.0.as_ptr();
-        let len = self.real_len();
-        let slice = slice::from_raw_parts(ptr, len);
-        str::from_utf8_unchecked(slice)
-    }
-
+    /// Convert an *owned* MownStr to a box.
+    //
+    // NB: conceptually this method consumes the Mownstr.
+    // The reason why self is a mutable ref instead of a move is purely technical
+    // (to make it usable in Drop::drop()).
     #[inline]
     unsafe fn extract_box(&mut self) -> Box<str> {
         debug_assert!(self.is_owned(), "extract_box() called on borrowed MownStr");
@@ -88,15 +84,8 @@ impl<'a> Clone for MownStr<'a> {
 
 impl<'a> From<&'a str> for MownStr<'a> {
     fn from(other: &'a str) -> MownStr<'a> {
-        let len = other.len();
-        assert!(len <= LEN_MASK);
-        let ptr = other.as_ptr();
-
-        let my_ref = unsafe {
-            let slice = slice::from_raw_parts(ptr, len & LEN_MASK);
-            str::from_utf8_unchecked(slice)
-        };
-        MownStr(my_ref)
+        assert!(other.len() <= LEN_MASK);
+        MownStr(other)
     }
 }
 
@@ -245,13 +234,13 @@ impl<'a> From<MownStr<'a>> for Cow<'a, str> {
         if other.is_owned() {
             other.to::<String>().into()
         } else {
-            unsafe { other.into_ref() }.into()
+            other.0.into()
         }
     }
 }
 
 impl<'a> MownStr<'a> {
-    /// Convert this `MownStr` to ant type `T`
+    /// Convert this `MownStr` to any type `T`
     /// that can be created from either a `&str` or a `Box<str>`.
     ///
     /// This can not be implemented with the `From` trait,
@@ -274,7 +263,7 @@ impl<'a> MownStr<'a> {
         if self.is_owned() {
             unsafe { self.extract_box() }.into()
         } else {
-            unsafe { self.into_ref() }.into()
+            self.0.into()
         }
     }
 }
