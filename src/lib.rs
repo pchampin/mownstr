@@ -29,11 +29,20 @@ const LEN_MASK: usize = usize::MAX >> 1;
 const OWN_FLAG: usize = !LEN_MASK;
 
 impl<'a> MownStr<'a> {
-    pub fn is_borrowed(&self) -> bool {
+    pub const fn from_str(other: &'a str) -> MownStr<'a> {
+        assert!(other.len() <= LEN_MASK);
+        MownStr {
+            ptr: other.as_bytes().as_ptr(),
+            len: other.len(),
+            _ph: PhantomData,
+        }
+    }
+
+    pub const fn is_borrowed(&self) -> bool {
         (self.len & OWN_FLAG) == 0
     }
 
-    pub fn is_owned(&self) -> bool {
+    pub const fn is_owned(&self) -> bool {
         (self.len & OWN_FLAG) == OWN_FLAG
     }
 
@@ -98,12 +107,7 @@ impl<'a> Clone for MownStr<'a> {
 
 impl<'a> From<&'a str> for MownStr<'a> {
     fn from(other: &'a str) -> MownStr<'a> {
-        assert!(other.len() <= LEN_MASK);
-        MownStr {
-            ptr: other.as_bytes().as_ptr(),
-            len: other.len(),
-            _ph: PhantomData,
-        }
+        Self::from_str(other)
     }
 }
 
