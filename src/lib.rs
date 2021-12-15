@@ -6,6 +6,7 @@ use std::fmt;
 use std::hash;
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::ptr::NonNull;
 use std::slice;
 use std::str;
 
@@ -20,9 +21,9 @@ use std::str;
 /// does not support strings with a length > `usize::MAX/2`.
 /// Trying to convert such a large string to a `MownStr` will panic.
 pub struct MownStr<'a> {
-    ptr: *const u8,
-    len: usize,
-    _ph: PhantomData<&'a str>,
+    addr: NonNull<u8>,
+    xlen: usize,
+    _phd: PhantomData<&'a str>,
 }
 
 const LEN_MASK: usize = usize::MAX >> 1;
@@ -31,30 +32,40 @@ const OWN_FLAG: usize = !LEN_MASK;
 impl<'a> MownStr<'a> {
     pub const fn from_str(other: &'a str) -> MownStr<'a> {
         assert!(other.len() <= LEN_MASK);
+        let ref1 = &other.as_bytes()[0];
+        // NB: The only 'cont' constuctor for NonNull is new_unchecked
+        let addr = unsafe {
+            // SAFETY: we need a *mut u8 for new_unchecked,
+            //         but MownStr will never mutate its content
+            let ptr: *mut u8 = std::mem::transmute(ref1);
+            // SAFETY: ptr can not be null,
+            NonNull::new_unchecked(ptr)
+        };
         MownStr {
-            ptr: other.as_bytes().as_ptr(),
-            len: other.len(),
-            _ph: PhantomData,
+            addr,
+            xlen: other.len(),
+            _phd: PhantomData,
         }
     }
 
     pub const fn is_borrowed(&self) -> bool {
-        (self.len & OWN_FLAG) == 0
+        (self.xlen & OWN_FLAG) == 0
     }
 
     pub const fn is_owned(&self) -> bool {
-        (self.len & OWN_FLAG) == OWN_FLAG
+        (self.xlen & OWN_FLAG) == OWN_FLAG
     }
 
     #[inline]
     fn real_len(&self) -> usize {
-        self.len & LEN_MASK
+        self.xlen & LEN_MASK
     }
 
     #[inline]
     unsafe fn make_ref(&self) -> &'a str {
         debug_assert!(self.is_borrowed(), "make_ref() called on owned MownStr");
-        let slice = slice::from_raw_parts(self.ptr, self.len);
+        let ptr = self.addr.as_ptr();
+        let slice = slice::from_raw_parts(ptr, self.xlen);
         str::from_utf8_unchecked(slice)
     }
 
@@ -67,10 +78,10 @@ impl<'a> MownStr<'a> {
     unsafe fn extract_box(&mut self) -> Box<str> {
         debug_assert!(self.is_owned(), "extract_box() called on borrowed MownStr");
         // extract data to make box
-        let ptr = self.ptr as *mut u8;
+        let ptr = self.addr.as_ptr();
         let len = self.real_len();
         // turn to borrowed, to avoid double-free
-        self.len = 0;
+        self.xlen = 0;
         debug_assert!(self.is_borrowed());
         // make box
         let slice = slice::from_raw_parts_mut(ptr, len);
@@ -95,9 +106,9 @@ impl<'a> Clone for MownStr<'a> {
             Box::<str>::from(self.deref()).into()
         } else {
             MownStr {
-                ptr: self.ptr,
-                len: self.len,
-                _ph: self._ph,
+                addr: self.addr,
+                xlen: self.xlen,
+                _phd: self._phd,
             }
         }
     }
@@ -115,13 +126,13 @@ impl<'a> From<Box<str>> for MownStr<'a> {
     fn from(other: Box<str>) -> MownStr<'a> {
         let len = other.len();
         assert!(len <= LEN_MASK);
-        let ptr = other.as_bytes().as_ptr();
+        let addr = NonNull::from(&other.as_bytes()[0]);
 
         std::mem::forget(other);
 
-        let len = len | OWN_FLAG;
-        let _ph = PhantomData;
-        MownStr { ptr, len, _ph }
+        let xlen = len | OWN_FLAG;
+        let _phd = PhantomData;
+        MownStr { addr, xlen, _phd }
     }
 }
 
@@ -146,7 +157,7 @@ impl<'a> Deref for MownStr<'a> {
     type Target = str;
 
     fn deref(&self) -> &str {
-        let ptr = self.ptr;
+        let ptr = self.addr.as_ptr();
         let len = self.real_len();
         unsafe {
             let slice = slice::from_raw_parts(ptr, len);
@@ -301,6 +312,14 @@ mod test {
         assert_eq!(
             std::mem::size_of::<MownStr<'static>>(),
             std::mem::size_of::<&'static str>(),
+        );
+    }
+
+    #[test]
+    fn niche() {
+        assert_eq!(
+            std::mem::size_of::<MownStr<'static>>(),
+            std::mem::size_of::<Option<MownStr<'static>>>(),
         );
     }
 
