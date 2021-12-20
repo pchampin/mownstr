@@ -300,6 +300,7 @@ impl<'a> MownStr<'a> {
 }
 
 #[cfg(test)]
+#[allow(clippy::eq_op)]
 mod test {
     use super::MownStr;
     use std::borrow::Cow;
@@ -452,7 +453,7 @@ mod test {
         let mut v = vec![];
         for _ in 1..=10 {
             v.pop(); // COMMENT THIS LINE OUT to simulate a memory leak
-            let s = unsafe { String::from_utf8_unchecked(vec!['x' as u8; CAP]) };
+            let s = unsafe { String::from_utf8_unchecked(vec![b'x'; CAP]) };
             v.push(MownStr::from(s));
             println!(
                 "{} MownStrs in the Vec, of len {}, starting with {:?}",
@@ -463,7 +464,7 @@ mod test {
         }
         let m1 = get_vmsize();
         println!("vmsize = {} MB", m1 / 1000);
-        assert!(v.len() > 0); // ensure that v is not optimized away to soon
+        assert!(!v.is_empty()); // ensure that v is not optimized away to soon
         let increase = (m1 - m0) as f64 / (CAP / 1000) as f64;
         println!("increase = {}", increase);
         assert!(increase < 3.0);
@@ -473,7 +474,7 @@ mod test {
 
     fn get_vmsize() -> usize {
         let txt = fs::read_to_string("/proc/self/status").expect("read proc status");
-        let txt = txt.split("VmSize:").skip(1).next().unwrap();
+        let txt = txt.split("VmSize:").nth(1).unwrap();
         let txt = txt.split(" kB").next().unwrap();
         let txt = txt.trim();
         usize::from_str(txt).unwrap()

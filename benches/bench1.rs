@@ -14,6 +14,10 @@ fn refs(c: &mut Criterion) {
         black_box(&STRINGS),
         |b, &i| {
             b.iter(|| {
+                #[allow(clippy::iter_cloned_collect)]
+                // strangely, replacing .iter().cloned().collect() by to_vec(),
+                // as suggested by clippy, causes this test to crash :-/
+                #[allow(clippy::needless_collect)]
                 let v = i.iter().cloned().collect::<Vec<_>>();
                 assert!(v.len() == i.len())
             });
@@ -27,6 +31,7 @@ fn borrowed_mownstr(c: &mut Criterion) {
         black_box(&STRINGS),
         |b, &i| {
             b.iter(|| {
+                #[allow(clippy::needless_collect)]
                 let v = i.iter().map(|r| MownStr::from(*r)).collect::<Vec<_>>();
                 assert!(v.len() == i.len())
             });
@@ -40,6 +45,7 @@ fn strings(c: &mut Criterion) {
         black_box(&STRINGS),
         |b, &i| {
             b.iter(|| {
+                #[allow(clippy::needless_collect)]
                 let v = i
                     .iter()
                     .map(|r| r.to_string())
@@ -57,6 +63,7 @@ fn owned_mownstr(c: &mut Criterion) {
         black_box(&STRINGS),
         |b, &i| {
             b.iter(|| {
+                #[allow(clippy::needless_collect)]
                 let v = i
                     .iter()
                     .map(|r| r.to_string())
@@ -71,7 +78,7 @@ fn owned_mownstr(c: &mut Criterion) {
 criterion_group!(benches, refs, borrowed_mownstr, strings, owned_mownstr,);
 criterion_main!(benches);
 
-const STRINGS: [&'static str; 30] = [
+const STRINGS: [&str; 30] = [
     "Jeunes gens, prenez garde aux choses que vous dites.",
     "Tout peut sortir d'un mot qu'en passant vous perdîtes.",
     "Tout, la haine et le deuil ! - Et ne m'objectez pas",
