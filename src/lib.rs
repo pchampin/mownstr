@@ -32,14 +32,19 @@ const OWN_FLAG: usize = !LEN_MASK;
 impl<'a> MownStr<'a> {
     pub const fn from_str(other: &'a str) -> MownStr<'a> {
         assert!(other.len() <= LEN_MASK);
-        let ref1 = &other.as_bytes()[0];
-        // NB: The only 'cont' constuctor for NonNull is new_unchecked
-        let addr = unsafe {
-            // SAFETY: we need a *mut u8 for new_unchecked,
-            //         but MownStr will never mutate its content
-            let ptr: *mut u8 = std::mem::transmute(ref1);
-            // SAFETY: ptr can not be null,
-            NonNull::new_unchecked(ptr)
+        let addr = if other.is_empty() {
+            NonNull::dangling()
+        } else {
+            let ref1 = &other.as_bytes()[0];
+            // NB: The only 'const' constuctor for NonNull is new_unchecked
+            // so we need an unsafe block.
+            unsafe {
+                // SAFETY: we need a *mut u8 for new_unchecked,
+                //         but MownStr will never mutate its content
+                let ptr: *mut u8 = std::mem::transmute(ref1);
+                // SAFETY: ptr can not be null,
+                NonNull::new_unchecked(ptr)
+            }
         };
         MownStr {
             addr,
@@ -322,6 +327,13 @@ mod test {
             std::mem::size_of::<MownStr<'static>>(),
             std::mem::size_of::<Option<MownStr<'static>>>(),
         );
+    }
+
+    #[test]
+    fn test_build_borrowed_empty() {
+        let mown: MownStr = "".into();
+        assert!(mown.is_borrowed());
+        assert_eq!(mown, "");
     }
 
     #[test]
