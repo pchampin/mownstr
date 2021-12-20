@@ -1,7 +1,7 @@
 [package]
 name = "mownstr"
 description = "Maybe Owned String"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Pierre-Antoine Champin <pchampin@liris.cnrs.fr>"]
 edition = "2018"
 repository = "https://github.com/pchampin/mownstr"

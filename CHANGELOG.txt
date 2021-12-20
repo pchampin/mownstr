@@ -1,3 +1,7 @@
+0.1.2
+    Add 'const' constructor Mown::from_str
+    Cleaner inner design
+
 0.1.1
     Fixed a bug causing double-free
 
