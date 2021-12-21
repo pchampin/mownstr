@@ -32,19 +32,15 @@ const OWN_FLAG: usize = !LEN_MASK;
 impl<'a> MownStr<'a> {
     pub const fn from_str(other: &'a str) -> MownStr<'a> {
         assert!(other.len() <= LEN_MASK);
-        let addr = if other.is_empty() {
-            NonNull::dangling()
-        } else {
-            let ref1 = &other.as_bytes()[0];
-            // NB: The only 'const' constuctor for NonNull is new_unchecked
-            // so we need an unsafe block.
-            unsafe {
-                // SAFETY: we need a *mut u8 for new_unchecked,
-                //         but MownStr will never mutate its content
-                let ptr: *mut u8 = std::mem::transmute(ref1);
-                // SAFETY: ptr can not be null,
-                NonNull::new_unchecked(ptr)
-            }
+        // NB: The only 'const' constuctor for NonNull is new_unchecked
+        // so we need an unsafe block.
+
+        // SAFETY: we need a *mut u8 for new_unchecked,
+        //         but MownStr will never mutate its content
+        let ptr = other.as_ptr() as *mut u8;
+        let addr = unsafe {
+            // SAFETY: ptr can not be null,
+            NonNull::new_unchecked(ptr)
         };
         MownStr {
             addr,
@@ -479,7 +475,7 @@ mod test {
         assert!(!v.is_empty()); // ensure that v is not optimized away to soon
         let increase = (m1 - m0) as f64 / (CAP / 1000) as f64;
         println!("increase = {}", increase);
-        assert!(increase < 3.0);
+        assert!(increase < 3.5);
     }
 
     const CAP: usize = 100_000_000;
