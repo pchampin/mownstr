@@ -57,7 +57,7 @@ impl<'a> MownStr<'a> {
         (self.xlen & OWN_FLAG) == OWN_FLAG
     }
 
-    pub const fn borrow(&self) -> MownStr {
+    pub const fn borrowed(&self) -> MownStr {
         MownStr {
             addr: self.addr,
             xlen: self.xlen & LEN_MASK,
@@ -372,9 +372,9 @@ mod test {
     }
 
     #[test]
-    fn test_borrow() {
+    fn test_borrowed() {
         let mown1: MownStr = "hello".to_string().into();
-        let mown2 = mown1.borrow();
+        let mown2 = mown1.borrowed();
         assert!(mown2.is_borrowed());
         assert_eq!(mown1, mown2);
     }
