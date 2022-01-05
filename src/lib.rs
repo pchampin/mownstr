@@ -26,6 +26,14 @@ pub struct MownStr<'a> {
     _phd: PhantomData<&'a str>,
 }
 
+// MownStr does not implement `Sync` and `Send` by default,
+// because NonNull<u8> does not.
+// However, it is safe to declare it as Sync and Send,
+// because MownStr are basically nothing more than a `&str`,
+// or a `Box<str>`, and both are `Sync` and `Send`.
+unsafe impl Sync for MownStr<'_> {}
+unsafe impl Send for MownStr<'_> {}
+
 const LEN_MASK: usize = usize::MAX >> 1;
 const OWN_FLAG: usize = !LEN_MASK;
 
