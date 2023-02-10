@@ -1,6 +1,10 @@
 MownStr: Maybe Owned String
 ===========================
 
+[![Latest Version](https://img.shields.io/crates/v/mownstr.svg)](https://crates.io/crates/mownstr)
+[![Documentation](https://docs.rs/mownstr/badge.svg)](https://docs.rs/mownstr/)
+[![Actions Status](https://github.com/pchampin/mownstr/actions/workflows/lint_and_test.yml/badge.svg)](https://github.com/pchampin/mownstr/actions)
+
 This crate provides `MownStr`,
 a type for exchanging read-only strings that may be either borrowed or owned.
 
