@@ -185,13 +185,13 @@ impl<'a> Deref for MownStr<'a> {
 
 impl<'a> AsRef<str> for MownStr<'a> {
     fn as_ref(&self) -> &str {
-        &*self
+        self.deref()
     }
 }
 
 impl<'a> std::borrow::Borrow<str> for MownStr<'a> {
     fn borrow(&self) -> &str {
-        &*self
+        self.deref()
     }
 }
 
