@@ -1,7 +1,7 @@
 [package]
 name = "mownstr"
 description = "Maybe Owned String"
-version = "0.1.3"
+version = "0.2.0"
 authors = ["Pierre-Antoine Champin <pchampin@liris.cnrs.fr>"]
 edition = "2021"
 repository = "https://github.com/pchampin/mownstr"
@@ -15,7 +15,7 @@ keywords = ["string", "wrapper", "semantic-web"]
 [dependencies]
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.4"
 
 [[bench]]
 name = "bench1"
