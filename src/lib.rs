@@ -140,10 +140,14 @@ impl<'a> From<&'a str> for MownStr<'a> {
 }
 
 impl<'a> From<Box<str>> for MownStr<'a> {
-    fn from(other: Box<str>) -> MownStr<'a> {
+    fn from(mut other: Box<str>) -> MownStr<'a> {
         let len = other.len();
         assert!(len <= LEN_MASK);
-        let addr = NonNull::from(&other.as_bytes()[0]);
+        let addr = other.as_mut_ptr();
+        let addr = unsafe {
+            // SAFETY: ptr can not be null,
+            NonNull::new_unchecked(addr)
+        };
 
         std::mem::forget(other);
 
@@ -500,6 +504,12 @@ mod test {
         let increase = (m1 - m0) as f64 / (CAP / 1000) as f64;
         println!("increase = {}", increase);
         assert!(increase < 3.5);
+    }
+
+    #[test]
+    fn empty_string() {
+        let empty = "".to_string();
+        let _ = MownStr::from(empty);
     }
 
     const CAP: usize = 100_000_000;
