@@ -29,7 +29,7 @@ pub struct MownStr<'a> {
 // MownStr does not implement `Sync` and `Send` by default,
 // because NonNull<u8> does not.
 // However, it is safe to declare it as Sync and Send,
-// because MownStr are basically nothing more than a `&str`,
+// because MownStr is basically nothing more than a `&str`,
 // or a `Box<str>`, and both are `Sync` and `Send`.
 unsafe impl Sync for MownStr<'_> {}
 unsafe impl Send for MownStr<'_> {}
@@ -481,29 +481,29 @@ mod test {
         // (unless the v.pop() line below is commented out).
         //
         // If there is no memory leak,
-        // the increase in vmsize should be roughly 1 time the allocated size;
-        // otherwise, it should be at least 3 times that size.
+        // the increase in memory should be roughly 1 time the allocated size;
+        // otherwise, it should be roghly 10 times that size.
 
-        let m0 = get_vmsize();
-        println!("vmsize = {} MB", m0 / 1000);
+        let m0 = get_rss_anon();
+        println!("memory = {} kB", m0);
         let mut v = vec![];
-        for _ in 1..=10 {
+        for i in 0..10 {
             v.pop(); // COMMENT THIS LINE OUT to simulate a memory leak
-            let s = unsafe { String::from_utf8_unchecked(vec![b'x'; CAP]) };
+            let s = unsafe { String::from_utf8_unchecked(vec![b'a' + i; CAP]) };
             v.push(MownStr::from(s));
             println!(
-                "{} MownStrs in the Vec, of len {}, starting with {:?}",
+                "{} MownStr(s) in the Vec, of len {}, starting with {:?}",
                 v.len(),
                 v[v.len() - 1].len(),
                 &v[v.len() - 1][..2]
             );
         }
-        let m1 = get_vmsize();
-        println!("vmsize = {} MB", m1 / 1000);
+        let m1 = get_rss_anon();
+        println!("memory = {} kB", m1);
         assert!(!v.is_empty()); // ensure that v is not optimized away to soon
         let increase = (m1 - m0) as f64 / (CAP / 1000) as f64;
         println!("increase = {}", increase);
-        assert!(increase < 3.5);
+        assert!(increase < 1.5);
     }
 
     #[test]
@@ -514,9 +514,9 @@ mod test {
 
     const CAP: usize = 100_000_000;
 
-    fn get_vmsize() -> usize {
+    fn get_rss_anon() -> usize {
         let txt = fs::read_to_string("/proc/self/status").expect("read proc status");
-        let txt = txt.split("VmSize:").nth(1).unwrap();
+        let txt = txt.split("RssAnon:").nth(1).unwrap();
         let txt = txt.split(" kB").next().unwrap();
         let txt = txt.trim();
         usize::from_str(txt).unwrap()
