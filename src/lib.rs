@@ -127,9 +127,12 @@ impl<'a> Drop for MownStr<'a> {
 
 impl<'a> Clone for MownStr<'a> {
     fn clone(&self) -> MownStr<'a> {
+        self.count.fetch_add(1, Ordering::Relaxed);
+
         if self.is_owned() {
-            self.count.fetch_add(1, Ordering::Relaxed);
-            Box::<str>::from(self.deref()).into()
+            let mut new : MownStr = Box::<str>::from(self.deref()).into();
+            new.count = self.count.clone();
+            new
         } else {
             MownStr {
                 addr: self.addr,
@@ -205,6 +208,7 @@ impl<'a> AsRef<str> for MownStr<'a> {
 
 impl<'a> std::borrow::Borrow<str> for MownStr<'a> {
     fn borrow(&self) -> &str {
+        self.count.fetch_add(1, Ordering::Relaxed);
         self.deref()
     }
 }
@@ -336,16 +340,18 @@ mod test {
     use super::MownStr;
     use std::borrow::Cow;
     use std::collections::HashSet;
-    use std::fs;
-    use std::str::FromStr;
+    use std::thread;
+    use std::sync::atomic::Ordering;
+    use std::sync::mpsc::channel;
 
-    // #[test]
-    // fn size() {
-    //     assert_eq!(
-    //         std::mem::size_of::<MownStr<'static>>(),
-    //         std::mem::size_of::<&'static str>(),
-    //     );
-    // }
+    #[ignore]
+    #[test]
+    fn size() {
+        assert_eq!(
+            std::mem::size_of::<MownStr<'static>>(),
+            std::mem::size_of::<&'static str>(),
+        );
+    }
 
     #[test]
     fn niche() {
@@ -483,6 +489,32 @@ mod test {
         assert_eq!(&bx[..4], "hell");
     }
 
+    #[test]
+    fn empty_string() {
+        let empty = "".to_string();
+        let _ = MownStr::from(empty);
+    }
+
+    #[test]
+    fn reference_count() {
+        let mown1: MownStr = "hello".into();
+        assert_eq!(1, mown1.count.load(Ordering::Relaxed));
+
+        let mown2 = mown1.clone();
+        assert_eq!(2, mown1.count.load(Ordering::Relaxed));
+        assert_eq!(2, mown2.count.load(Ordering::Relaxed));
+
+        let (tx, rx) = channel();
+
+        thread::spawn(move || {
+            let recv: MownStr = rx.recv().unwrap();
+            assert_eq!(1, recv.count.load(Ordering::Relaxed));
+        });
+
+        tx.send(mown2).unwrap();
+        assert_eq!(2, mown1.count.load(Ordering::Relaxed));
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn no_memory_leak() {
@@ -493,6 +525,8 @@ mod test {
         // If there is no memory leak,
         // the increase in memory should be roughly 1 time the allocated size;
         // otherwise, it should be roghly 10 times that size.
+
+        const CAP: usize = 100_000_000;
 
         let m0 = get_rss_anon();
         println!("memory = {} kB", m0);
@@ -516,15 +550,10 @@ mod test {
         assert!(increase < 1.5);
     }
 
-    #[test]
-    fn empty_string() {
-        let empty = "".to_string();
-        let _ = MownStr::from(empty);
-    }
-
-    const CAP: usize = 100_000_000;
-
+    #[cfg(target_os = "linux")]
     fn get_rss_anon() -> usize {
+        use std::{fs, str::FromStr};
+
         let txt = fs::read_to_string("/proc/self/status").expect("read proc status");
         let txt = txt.split("RssAnon:").nth(1).unwrap();
         let txt = txt.split(" kB").next().unwrap();
