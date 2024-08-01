@@ -38,7 +38,7 @@ unsafe impl Sync for MownStr<'_> {}
 unsafe impl Send for MownStr<'_> {}
 
 impl<'a> MownStr<'a> {
-    pub fn from_str(other: &'a str) -> MownStr<'a> {
+    pub fn from_slice(other: &'a str) -> MownStr<'a> {
         // NB: The only 'const' constructor for NonNull is new_unchecked
         // so we need an unsafe block.
 
@@ -139,7 +139,7 @@ impl<'a> Clone for MownStr<'a> {
 
 impl<'a> From<&'a str> for MownStr<'a> {
     fn from(other: &'a str) -> MownStr<'a> {
-        Self::from_str(other)
+        Self::from_slice(other)
     }
 }
 
@@ -204,6 +204,7 @@ impl<'a> std::borrow::Borrow<str> for MownStr<'a> {
 
 // Comparing between MownStr
 
+#[allow(clippy::mutable_key_type)]
 impl<'a> hash::Hash for MownStr<'a> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.deref().hash(state)
@@ -453,10 +454,10 @@ mod test {
     fn test_display() {
         let mown1: MownStr = "hello".into();
         let mown2: MownStr = "hello".to_string().into();
-        assert_eq!(format!("{:?}", mown1), "\"hello\"");
-        assert_eq!(format!("{:?}", mown2), "\"hello\"");
-        assert_eq!(format!("{}", mown1), "hello");
-        assert_eq!(format!("{}", mown2), "hello");
+        assert_eq!(format!("{mown1:?}"), "\"hello\"");
+        assert_eq!(format!("{mown2:?}"), "\"hello\"");
+        assert_eq!(format!("{mown1}"), "hello");
+        assert_eq!(format!("{mown2}"), "hello");
     }
 
     #[test]
