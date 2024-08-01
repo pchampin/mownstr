@@ -22,6 +22,7 @@ use std::sync::Arc;
 /// The drawback is that `MownStr`
 /// does not support strings with a length > `usize::MAX/2`.
 /// Trying to convert such a large string to a `MownStr` will panic.
+#[allow(clippy::mutable_key_type)]
 pub struct MownStr<'a> {
     addr: NonNull<u8>,
     len: usize,
@@ -204,7 +205,6 @@ impl<'a> std::borrow::Borrow<str> for MownStr<'a> {
 
 // Comparing between MownStr
 
-#[allow(clippy::mutable_key_type)]
 impl<'a> hash::Hash for MownStr<'a> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.deref().hash(state)
@@ -219,6 +219,7 @@ impl<'a> PartialEq for MownStr<'a> {
 
 impl<'a> Eq for MownStr<'a> {}
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl<'a> PartialOrd for MownStr<'a> {
     fn partial_cmp(&self, other: &MownStr<'a>) -> Option<std::cmp::Ordering> {
         self.deref().partial_cmp(other.deref())
