@@ -9,8 +9,8 @@ use std::ops::Deref;
 use std::ptr::NonNull;
 use std::slice;
 use std::str;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// "Maybe own str":
 /// either a borrowed reference to a `str` or an owned `Box<str>`.
@@ -24,9 +24,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// Trying to convert such a large string to a `MownStr` will panic.
 pub struct MownStr<'a> {
     addr: NonNull<u8>,
-    xlen: usize,
+    len: usize,
     _phd: PhantomData<&'a str>,
-    count: Arc<AtomicUsize>,
+    owners: Option<Arc<AtomicUsize>>,
 }
 
 // MownStr does not implement `Sync` and `Send` by default,
@@ -37,12 +37,8 @@ pub struct MownStr<'a> {
 unsafe impl Sync for MownStr<'_> {}
 unsafe impl Send for MownStr<'_> {}
 
-const LEN_MASK: usize = usize::MAX >> 1;
-const OWN_FLAG: usize = !LEN_MASK;
-
 impl<'a> MownStr<'a> {
     pub fn from_str(other: &'a str) -> MownStr<'a> {
-        assert!(other.len() <= LEN_MASK);
         // NB: The only 'const' constuctor for NonNull is new_unchecked
         // so we need an unsafe block.
 
@@ -55,40 +51,38 @@ impl<'a> MownStr<'a> {
         };
         MownStr {
             addr,
-            xlen: other.len(),
+            len: other.len(),
             _phd: PhantomData,
-            count: Arc::new(AtomicUsize::new(1)),
+            owners: None,
         }
+    }
+    fn cleanup(&self) -> bool {
+        self.owners
+            .as_ref()
+            .map(|c| c.load(Ordering::SeqCst) == 0)
+            .unwrap_or(false)
     }
 
     pub const fn is_borrowed(&self) -> bool {
-        (self.xlen & OWN_FLAG) == 0
+        self.owners.is_none()
     }
 
     pub const fn is_owned(&self) -> bool {
-        (self.xlen & OWN_FLAG) == OWN_FLAG
+        self.owners.is_some()
     }
 
-    pub fn borrowed(&self) -> MownStr {
-        self.count.fetch_add(1, Ordering::Relaxed);
-        MownStr {
-            addr: self.addr,
-            xlen: self.xlen & LEN_MASK,
-            _phd: PhantomData,
-            count: self.count.clone(),
-        }
-    }
-
-    #[inline]
-    fn real_len(&self) -> usize {
-        self.xlen & LEN_MASK
+    pub fn owners(&self) -> usize {
+        self.owners
+            .as_ref()
+            .map(|o| o.load(Ordering::Relaxed))
+            .unwrap_or(0)
     }
 
     #[inline]
     unsafe fn make_ref(&self) -> &'a str {
         debug_assert!(self.is_borrowed(), "make_ref() called on owned MownStr");
         let ptr = self.addr.as_ptr();
-        let slice = slice::from_raw_parts(ptr, self.xlen);
+        let slice = slice::from_raw_parts(ptr, self.len);
         str::from_utf8_unchecked(slice)
     }
 
@@ -102,12 +96,11 @@ impl<'a> MownStr<'a> {
         debug_assert!(self.is_owned(), "extract_box() called on borrowed MownStr");
         // extract data to make box
         let ptr = self.addr.as_ptr();
-        let len = self.real_len();
         // turn to borrowed, to avoid double-free
-        self.xlen = 0;
+        self.owners = None;
         debug_assert!(self.is_borrowed());
         // make box
-        let slice = slice::from_raw_parts_mut(ptr, len);
+        let slice = slice::from_raw_parts_mut(ptr, self.len);
         let raw = str::from_utf8_unchecked_mut(slice) as *mut str;
         Box::from_raw(raw)
     }
@@ -115,11 +108,13 @@ impl<'a> MownStr<'a> {
 
 impl<'a> Drop for MownStr<'a> {
     fn drop(&mut self) {
-        let prev = self.count.fetch_sub(1, Ordering::Relaxed);
-
-        if prev <= 1 && self.is_owned() {
+        self.owners
+            .as_ref()
+            .map(|o| o.fetch_sub(1, Ordering::SeqCst));
+        if self.cleanup() {
+            dbg!(&self.owners);
             unsafe {
-                std::mem::drop(self.extract_box());
+                drop(self.extract_box());
             }
         }
     }
@@ -127,19 +122,15 @@ impl<'a> Drop for MownStr<'a> {
 
 impl<'a> Clone for MownStr<'a> {
     fn clone(&self) -> MownStr<'a> {
-        self.count.fetch_add(1, Ordering::Relaxed);
+        self.owners
+            .as_ref()
+            .map(|o| o.fetch_add(1, Ordering::SeqCst));
 
-        if self.is_owned() {
-            let mut new : MownStr = Box::<str>::from(self.deref()).into();
-            new.count = self.count.clone();
-            new
-        } else {
-            MownStr {
-                addr: self.addr,
-                xlen: self.xlen,
-                _phd: self._phd,
-                count: self.count.clone(),
-            }
+        MownStr {
+            addr: self.addr,
+            len: self.len,
+            _phd: self._phd,
+            owners: self.owners.clone(),
         }
     }
 }
@@ -153,20 +144,20 @@ impl<'a> From<&'a str> for MownStr<'a> {
 }
 
 impl<'a> From<Box<str>> for MownStr<'a> {
-    fn from(mut other: Box<str>) -> MownStr<'a> {
+    fn from(other: Box<str>) -> MownStr<'a> {
         let len = other.len();
-        assert!(len <= LEN_MASK);
-        let addr = other.as_mut_ptr();
+        let addr = Box::into_raw(other);
         let addr = unsafe {
             // SAFETY: ptr can not be null,
-            NonNull::new_unchecked(addr)
+            NonNull::new_unchecked(addr).cast::<u8>()
         };
 
-        std::mem::forget(other);
-
-        let xlen = len | OWN_FLAG;
-        let _phd = PhantomData;
-        MownStr { addr, xlen, _phd, count: Arc::new(AtomicUsize::new(1)) }
+        MownStr {
+            addr,
+            len,
+            _phd: PhantomData,
+            owners: Some(Arc::new(AtomicUsize::new(1))),
+        }
     }
 }
 
@@ -192,9 +183,8 @@ impl<'a> Deref for MownStr<'a> {
 
     fn deref(&self) -> &str {
         let ptr = self.addr.as_ptr();
-        let len = self.real_len();
         unsafe {
-            let slice = slice::from_raw_parts(ptr, len);
+            let slice = slice::from_raw_parts(ptr, self.len);
             str::from_utf8_unchecked(slice)
         }
     }
@@ -208,7 +198,6 @@ impl<'a> AsRef<str> for MownStr<'a> {
 
 impl<'a> std::borrow::Borrow<str> for MownStr<'a> {
     fn borrow(&self) -> &str {
-        self.count.fetch_add(1, Ordering::Relaxed);
         self.deref()
     }
 }
@@ -340,9 +329,8 @@ mod test {
     use super::MownStr;
     use std::borrow::Cow;
     use std::collections::HashSet;
-    use std::thread;
-    use std::sync::atomic::Ordering;
     use std::sync::mpsc::channel;
+    use std::thread;
 
     #[ignore]
     #[test]
@@ -400,14 +388,6 @@ mod test {
     }
 
     #[test]
-    fn test_borrowed() {
-        let mown1: MownStr = "hello".to_string().into();
-        let mown2 = mown1.borrowed();
-        assert!(mown2.is_borrowed());
-        assert_eq!(mown1, mown2);
-    }
-
-    #[test]
     fn test_deref() {
         let txt = "hello";
         let mown1: MownStr = txt.into();
@@ -420,11 +400,11 @@ mod test {
 
     #[test]
     fn test_hash() {
-        let txt = "hello";
+        let txt = "mown2";
         let mown1: MownStr = txt.into();
         let mown2: MownStr = txt.to_string().into();
 
-        let mut set = HashSet::new();
+        let mut set: HashSet<MownStr> = HashSet::new();
         set.insert(mown1.clone());
         assert!(set.contains(&mown1));
         assert!(set.contains(&mown2));
@@ -497,22 +477,23 @@ mod test {
 
     #[test]
     fn reference_count() {
-        let mown1: MownStr = "hello".into();
-        assert_eq!(1, mown1.count.load(Ordering::Relaxed));
-
+        let mown1: MownStr<'_> = "hello".to_string().into();
+        assert_eq!(1, mown1.owners());
         let mown2 = mown1.clone();
-        assert_eq!(2, mown1.count.load(Ordering::Relaxed));
-        assert_eq!(2, mown2.count.load(Ordering::Relaxed));
+        assert_eq!(2, mown1.owners());
+        assert_eq!(2, mown2.owners());
 
         let (tx, rx) = channel();
 
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             let recv: MownStr = rx.recv().unwrap();
-            assert_eq!(1, recv.count.load(Ordering::Relaxed));
+            assert_eq!(2, recv.owners());
         });
 
         tx.send(mown2).unwrap();
-        assert_eq!(2, mown1.count.load(Ordering::Relaxed));
+        assert_eq!(2, mown1.owners());
+        handle.join().unwrap();
+        assert_eq!(1, mown1.owners());
     }
 
     #[cfg(target_os = "linux")]
