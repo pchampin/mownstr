@@ -39,7 +39,7 @@ unsafe impl Sync for MownStr<'_> {}
 unsafe impl Send for MownStr<'_> {}
 
 impl<'a> MownStr<'a> {
-    pub fn from_slice(other: &'a str) -> MownStr<'a> {
+    pub fn from_slice(other: &'a str) -> Self {
         // NB: The only 'const' constructor for NonNull is new_unchecked
         // so we need an unsafe block.
 
@@ -57,11 +57,9 @@ impl<'a> MownStr<'a> {
             owners: None,
         }
     }
-    fn cleanup(&self) -> bool {
-        self.owners
-            .as_ref()
-            .map(|c| c.load(Ordering::SeqCst) == 0)
-            .unwrap_or(false)
+
+    pub fn borrowed(&self) -> Self {
+        self.clone()
     }
 
     pub const fn is_borrowed(&self) -> bool {
@@ -109,11 +107,12 @@ impl<'a> MownStr<'a> {
 
 impl<'a> Drop for MownStr<'a> {
     fn drop(&mut self) {
-        self.owners
+        // if this is the last owner for the underlying string
+        if let Some(1) = self
+            .owners
             .as_ref()
-            .map(|o| o.fetch_sub(1, Ordering::SeqCst));
-        if self.cleanup() {
-            dbg!(&self.owners);
+            .map(|o| o.fetch_sub(1, Ordering::Relaxed))
+        {
             unsafe {
                 drop(self.extract_box());
             }
@@ -122,10 +121,10 @@ impl<'a> Drop for MownStr<'a> {
 }
 
 impl<'a> Clone for MownStr<'a> {
-    fn clone(&self) -> MownStr<'a> {
+    fn clone(&self) -> Self {
         self.owners
             .as_ref()
-            .map(|o| o.fetch_add(1, Ordering::SeqCst));
+            .map(|o| o.fetch_add(1, Ordering::Relaxed));
 
         MownStr {
             addr: self.addr,
@@ -139,13 +138,13 @@ impl<'a> Clone for MownStr<'a> {
 // Construct a MownStr
 
 impl<'a> From<&'a str> for MownStr<'a> {
-    fn from(other: &'a str) -> MownStr<'a> {
+    fn from(other: &'a str) -> Self {
         Self::from_slice(other)
     }
 }
 
 impl<'a> From<Box<str>> for MownStr<'a> {
-    fn from(other: Box<str>) -> MownStr<'a> {
+    fn from(other: Box<str>) -> Self {
         let len = other.len();
         let addr = Box::into_raw(other);
         let addr = unsafe {
@@ -163,13 +162,13 @@ impl<'a> From<Box<str>> for MownStr<'a> {
 }
 
 impl<'a> From<String> for MownStr<'a> {
-    fn from(other: String) -> MownStr<'a> {
+    fn from(other: String) -> Self {
         other.into_boxed_str().into()
     }
 }
 
 impl<'a> From<Cow<'a, str>> for MownStr<'a> {
-    fn from(other: Cow<'a, str>) -> MownStr<'a> {
+    fn from(other: Cow<'a, str>) -> Self {
         match other {
             Cow::Borrowed(r) => r.into(),
             Cow::Owned(s) => s.into(),
@@ -182,6 +181,8 @@ impl<'a> From<Cow<'a, str>> for MownStr<'a> {
 impl<'a> Deref for MownStr<'a> {
     type Target = str;
 
+    // *mut u8
+    // *mut str
     fn deref(&self) -> &str {
         let ptr = self.addr.as_ptr();
         unsafe {
