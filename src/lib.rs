@@ -39,7 +39,7 @@ unsafe impl Sync for MownStr<'_> {}
 unsafe impl Send for MownStr<'_> {}
 
 impl<'a> MownStr<'a> {
-    pub fn from_slice(other: &'a str) -> Self {
+    pub fn from_ref(other: &'a str) -> Self {
         // NB: The only 'const' constructor for NonNull is new_unchecked
         // so we need an unsafe block.
 
@@ -58,8 +58,8 @@ impl<'a> MownStr<'a> {
         }
     }
 
-    pub fn borrowed(&self) -> Self {
-        self.clone()
+    pub fn borrowed(&self) -> MownStr<'_> {
+        MownStr::from_ref(self.as_ref())
     }
 
     pub const fn is_borrowed(&self) -> bool {
@@ -139,7 +139,7 @@ impl<'a> Clone for MownStr<'a> {
 
 impl<'a> From<&'a str> for MownStr<'a> {
     fn from(other: &'a str) -> Self {
-        Self::from_slice(other)
+        Self::from_ref(other)
     }
 }
 
