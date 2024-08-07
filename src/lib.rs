@@ -22,7 +22,6 @@ use std::sync::Arc;
 /// The drawback is that `MownStr`
 /// does not support strings with a length > `usize::MAX/2`.
 /// Trying to convert such a large string to a `MownStr` will panic.
-#[allow(clippy::mutable_key_type)]
 pub struct MownStr<'a> {
     addr: NonNull<u8>,
     len: usize,
