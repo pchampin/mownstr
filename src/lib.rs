@@ -140,16 +140,14 @@ impl<'a> From<&'a str> for MownStr<'a> {
 }
 
 impl<'a> From<Box<str>> for MownStr<'a> {
-    fn from(mut other: Box<str>) -> MownStr<'a> {
+    fn from(other: Box<str>) -> MownStr<'a> {
         let len = other.len();
         assert!(len <= LEN_MASK);
-        let addr = other.as_mut_ptr();
+        let addr = Box::leak(other).as_mut_ptr();
         let addr = unsafe {
             // SAFETY: ptr can not be null,
             NonNull::new_unchecked(addr)
         };
-
-        std::mem::forget(other);
 
         let xlen = len | OWN_FLAG;
         let _phd = PhantomData;
