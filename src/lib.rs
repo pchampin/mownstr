@@ -472,6 +472,7 @@ mod test {
     }
 
     #[cfg(target_os = "linux")]
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn no_memory_leak() {
         // performs several MownStr allocation in sequence,
