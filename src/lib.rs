@@ -40,7 +40,7 @@ const OWN_FLAG: usize = !LEN_MASK;
 impl<'a> MownStr<'a> {
     pub const fn from_str(other: &'a str) -> MownStr<'a> {
         assert!(other.len() <= LEN_MASK);
-        // NB: The only 'const' constuctor for NonNull is new_unchecked
+        // NB: The only 'const' constructor for NonNull is new_unchecked
         // so we need an unsafe block.
 
         // SAFETY: we need a *mut u8 for new_unchecked,
@@ -476,7 +476,7 @@ mod test {
     #[test]
     fn no_memory_leak() {
         // performs several MownStr allocation in sequence,
-        // droping each one before allocating the next one
+        // dropping each one before allocating the next one
         // (unless the v.pop() line below is commented out).
         //
         // If there is no memory leak,
