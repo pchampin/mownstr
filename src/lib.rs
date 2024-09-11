@@ -215,7 +215,7 @@ impl<'a> Eq for MownStr<'a> {}
 
 impl<'a> PartialOrd for MownStr<'a> {
     fn partial_cmp(&self, other: &MownStr<'a>) -> Option<std::cmp::Ordering> {
-        self.deref().partial_cmp(other.deref())
+        Some(self.cmp(other))
     }
 }
 
