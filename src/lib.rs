@@ -472,7 +472,6 @@ mod test {
     }
 
     #[cfg(target_os = "linux")]
-    #[cfg_attr(miri, ignore)]
     #[test]
     fn no_memory_leak() {
         // performs several MownStr allocation in sequence,
@@ -482,6 +481,10 @@ mod test {
         // If there is no memory leak,
         // the increase in memory should be roughly 1 time the allocated size;
         // otherwise, it should be roghly 10 times that size.
+        //
+        // NB: in miri, the value returned by get_rss_anon is fake,
+        // so no memory leak will ever be detected;
+        // but the test is still executed in miri to detect UB.
 
         let m0 = get_rss_anon();
         println!("memory = {} kB", m0);
@@ -514,6 +517,9 @@ mod test {
     const CAP: usize = 100_000_000;
 
     fn get_rss_anon() -> usize {
+        if cfg!(miri) {
+            return CAP; // return dummy value, as miri can not open files
+        }
         let txt = fs::read_to_string("/proc/self/status").expect("read proc status");
         let txt = txt.split("RssAnon:").nth(1).unwrap();
         let txt = txt.split(" kB").next().unwrap();
