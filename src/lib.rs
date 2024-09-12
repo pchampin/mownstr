@@ -344,45 +344,51 @@ mod test {
     }
 
     #[test]
-    fn test_build_borrowed_empty() {
+    fn empty_string() {
+        let empty = "".to_string();
+        let _ = MownStr::from(empty);
+    }
+
+    #[test]
+    fn build_borrowed_empty() {
         let mown: MownStr = "".into();
         assert!(mown.is_borrowed());
         assert_eq!(mown, "");
     }
 
     #[test]
-    fn test_build_borrowed() {
+    fn build_borrowed() {
         let mown: MownStr = "hello".into();
         assert!(mown.is_borrowed());
     }
 
     #[test]
-    fn test_build_owned_from_box() {
+    fn build_owned_from_box() {
         let bx: Box<str> = "hello".into();
         let mown: MownStr = bx.into();
         assert!(mown.is_owned());
     }
 
     #[test]
-    fn test_build_owned_from_string() {
+    fn build_owned_from_string() {
         let mown: MownStr = "hello".to_string().into();
         assert!(mown.is_owned());
     }
 
     #[test]
-    fn test_build_borrowed_from_cow() {
+    fn build_borrowed_from_cow() {
         let mown: MownStr = Cow::Borrowed("hello").into();
         assert!(mown.is_borrowed());
     }
 
     #[test]
-    fn test_build_owned_from_cow() {
+    fn build_owned_from_cow() {
         let mown: MownStr = Cow::<str>::Owned("hello".to_string()).into();
         assert!(mown.is_owned());
     }
 
     #[test]
-    fn test_borrowed() {
+    fn borrowed() {
         let mown1: MownStr = "hello".to_string().into();
         let mown2 = mown1.borrowed();
         assert!(mown2.is_borrowed());
@@ -390,7 +396,7 @@ mod test {
     }
 
     #[test]
-    fn test_deref() {
+    fn deref() {
         let txt = "hello";
         let mown1: MownStr = txt.into();
         assert_eq!(&*mown1, txt);
@@ -401,7 +407,7 @@ mod test {
     }
 
     #[test]
-    fn test_hash() {
+    fn hash() {
         let txt = "hello";
         let mown1: MownStr = txt.into();
         let mown2: MownStr = txt.to_string().into();
@@ -420,7 +426,7 @@ mod test {
     }
 
     #[test]
-    fn test_eq() {
+    fn eq() {
         let txt = "hello";
         let mown1: MownStr = txt.into();
         let mown2: MownStr = txt.to_string().into();
@@ -436,7 +442,7 @@ mod test {
     }
 
     #[test]
-    fn test_order() {
+    fn order() {
         let txt = "hello";
         let mown1: MownStr = txt[..4].into();
         let mown2: MownStr = txt[..3].to_string().into();
@@ -452,7 +458,7 @@ mod test {
     }
 
     #[test]
-    fn test_display() {
+    fn display() {
         let mown1: MownStr = "hello".into();
         let mown2: MownStr = "hello".to_string().into();
         assert_eq!(format!("{:?}", mown1), "\"hello\"");
@@ -508,17 +514,11 @@ mod test {
         assert!(increase < 1.5);
     }
 
-    #[test]
-    fn empty_string() {
-        let empty = "".to_string();
-        let _ = MownStr::from(empty);
-    }
-
     const CAP: usize = 100_000_000;
 
     fn get_rss_anon() -> usize {
         if cfg!(miri) {
-            return CAP; // return dummy value, as miri can not open files
+            return 0; // return dummy value, as miri can not open files
         }
         let txt = fs::read_to_string("/proc/self/status").expect("read proc status");
         let txt = txt.split("RssAnon:").nth(1).unwrap();
