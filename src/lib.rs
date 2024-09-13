@@ -38,7 +38,12 @@ const LEN_MASK: usize = usize::MAX >> 1;
 const OWN_FLAG: usize = !LEN_MASK;
 
 impl<'a> MownStr<'a> {
+    #[deprecated = "use from_ref instead. This method caused confusion with FromStr::from_str."]
     pub const fn from_str(other: &'a str) -> MownStr<'a> {
+        Self::from_ref(other)
+    }
+
+    pub const fn from_ref(other: &'a str) -> MownStr<'a> {
         assert!(other.len() <= LEN_MASK);
         // NB: The only 'const' constructor for NonNull is new_unchecked
         // so we need an unsafe block.
@@ -135,7 +140,7 @@ impl<'a> Clone for MownStr<'a> {
 
 impl<'a> From<&'a str> for MownStr<'a> {
     fn from(other: &'a str) -> MownStr<'a> {
-        Self::from_str(other)
+        Self::from_ref(other)
     }
 }
 
