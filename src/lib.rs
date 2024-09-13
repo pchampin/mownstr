@@ -40,12 +40,12 @@ const OWN_FLAG: usize = !LEN_MASK;
 impl<'a> MownStr<'a> {
     #[deprecated = "use from_ref instead. This method caused confusion with FromStr::from_str."]
     #[must_use]
-    pub const fn from_str(other: &'a str) -> MownStr<'a> {
+    pub const fn from_str(other: &'a str) -> Self {
         Self::from_ref(other)
     }
 
     #[must_use]
-    pub const fn from_ref(other: &'a str) -> MownStr<'a> {
+    pub const fn from_ref(other: &'a str) -> Self {
         assert!(other.len() <= LEN_MASK);
         // NB: The only 'const' constructor for NonNull is new_unchecked
         // so we need an unsafe block.
@@ -84,7 +84,7 @@ impl<'a> MownStr<'a> {
     }
 
     #[inline]
-    fn real_len(&self) -> usize {
+    const fn real_len(&self) -> usize {
         self.xlen & LEN_MASK
     }
 
@@ -128,7 +128,7 @@ impl<'a> Drop for MownStr<'a> {
 }
 
 impl<'a> Clone for MownStr<'a> {
-    fn clone(&self) -> MownStr<'a> {
+    fn clone(&self) -> Self {
         if self.is_owned() {
             Box::<str>::from(&**self).into()
         } else {
@@ -144,13 +144,13 @@ impl<'a> Clone for MownStr<'a> {
 // Construct a MownStr
 
 impl<'a> From<&'a str> for MownStr<'a> {
-    fn from(other: &'a str) -> MownStr<'a> {
+    fn from(other: &'a str) -> Self {
         Self::from_ref(other)
     }
 }
 
 impl<'a> From<Box<str>> for MownStr<'a> {
-    fn from(other: Box<str>) -> MownStr<'a> {
+    fn from(other: Box<str>) -> Self {
         let len = other.len();
         assert!(len <= LEN_MASK);
         let addr = Box::leak(other).as_mut_ptr();
@@ -169,13 +169,13 @@ impl<'a> From<Box<str>> for MownStr<'a> {
 }
 
 impl<'a> From<String> for MownStr<'a> {
-    fn from(other: String) -> MownStr<'a> {
+    fn from(other: String) -> Self {
         other.into_boxed_str().into()
     }
 }
 
 impl<'a> From<Cow<'a, str>> for MownStr<'a> {
-    fn from(other: Cow<'a, str>) -> MownStr<'a> {
+    fn from(other: Cow<'a, str>) -> Self {
         match other {
             Cow::Borrowed(r) => r.into(),
             Cow::Owned(s) => s.into(),
@@ -219,7 +219,7 @@ impl<'a> hash::Hash for MownStr<'a> {
 }
 
 impl<'a> PartialEq for MownStr<'a> {
-    fn eq(&self, other: &MownStr<'a>) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         **self == **other
     }
 }
@@ -227,13 +227,13 @@ impl<'a> PartialEq for MownStr<'a> {
 impl<'a> Eq for MownStr<'a> {}
 
 impl<'a> PartialOrd for MownStr<'a> {
-    fn partial_cmp(&self, other: &MownStr<'a>) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl<'a> Ord for MownStr<'a> {
-    fn cmp(&self, other: &MownStr<'a>) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.deref().cmp(&**other)
     }
 }
@@ -281,19 +281,19 @@ impl<'a> fmt::Display for MownStr<'a> {
 // Converting
 
 impl<'a> From<MownStr<'a>> for Box<str> {
-    fn from(other: MownStr<'a>) -> Box<str> {
+    fn from(other: MownStr<'a>) -> Self {
         other.to()
     }
 }
 
 impl<'a> From<MownStr<'a>> for String {
-    fn from(other: MownStr<'a>) -> String {
+    fn from(other: MownStr<'a>) -> Self {
         other.to()
     }
 }
 
 impl<'a> From<MownStr<'a>> for Cow<'a, str> {
-    fn from(other: MownStr<'a>) -> Cow<'a, str> {
+    fn from(other: MownStr<'a>) -> Self {
         if other.is_owned() {
             other.to::<String>().into()
         } else {
