@@ -39,10 +39,12 @@ const OWN_FLAG: usize = !LEN_MASK;
 
 impl<'a> MownStr<'a> {
     #[deprecated = "use from_ref instead. This method caused confusion with FromStr::from_str."]
+    #[must_use]
     pub const fn from_str(other: &'a str) -> MownStr<'a> {
         Self::from_ref(other)
     }
 
+    #[must_use]
     pub const fn from_ref(other: &'a str) -> MownStr<'a> {
         assert!(other.len() <= LEN_MASK);
         // NB: The only 'const' constructor for NonNull is new_unchecked
@@ -50,7 +52,7 @@ impl<'a> MownStr<'a> {
 
         // SAFETY: we need a *mut u8 for new_unchecked,
         //         but MownStr will never mutate its content
-        let ptr = other.as_ptr() as *mut u8;
+        let ptr = other.as_ptr().cast_mut();
         let addr = unsafe {
             // SAFETY: ptr can not be null,
             NonNull::new_unchecked(ptr)
@@ -62,14 +64,17 @@ impl<'a> MownStr<'a> {
         }
     }
 
+    #[must_use]
     pub const fn is_borrowed(&self) -> bool {
         (self.xlen & OWN_FLAG) == 0
     }
 
+    #[must_use]
     pub const fn is_owned(&self) -> bool {
         (self.xlen & OWN_FLAG) == OWN_FLAG
     }
 
+    #[must_use]
     pub const fn borrowed(&self) -> MownStr {
         MownStr {
             addr: self.addr,
@@ -91,7 +96,7 @@ impl<'a> MownStr<'a> {
         str::from_utf8_unchecked(slice)
     }
 
-    /// Convert an *owned* MownStr to a box.
+    /// Convert an *owned* `MownStr` to a box.
     //
     // NB: conceptually this method consumes the Mownstr.
     // The reason why self is a mutable ref instead of a move is purely technical
@@ -125,7 +130,7 @@ impl<'a> Drop for MownStr<'a> {
 impl<'a> Clone for MownStr<'a> {
     fn clone(&self) -> MownStr<'a> {
         if self.is_owned() {
-            Box::<str>::from(self.deref()).into()
+            Box::<str>::from(&**self).into()
         } else {
             MownStr {
                 addr: self.addr,
@@ -155,8 +160,11 @@ impl<'a> From<Box<str>> for MownStr<'a> {
         };
 
         let xlen = len | OWN_FLAG;
-        let _phd = PhantomData;
-        MownStr { addr, xlen, _phd }
+        MownStr {
+            addr,
+            xlen,
+            _phd: PhantomData,
+        }
     }
 }
 
@@ -192,13 +200,13 @@ impl<'a> Deref for MownStr<'a> {
 
 impl<'a> AsRef<str> for MownStr<'a> {
     fn as_ref(&self) -> &str {
-        self.deref()
+        self
     }
 }
 
 impl<'a> std::borrow::Borrow<str> for MownStr<'a> {
     fn borrow(&self) -> &str {
-        self.deref()
+        self
     }
 }
 
@@ -206,13 +214,13 @@ impl<'a> std::borrow::Borrow<str> for MownStr<'a> {
 
 impl<'a> hash::Hash for MownStr<'a> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.deref().hash(state)
+        self.deref().hash(state);
     }
 }
 
 impl<'a> PartialEq for MownStr<'a> {
     fn eq(&self, other: &MownStr<'a>) -> bool {
-        self.deref() == other.deref()
+        **self == **other
     }
 }
 
@@ -226,7 +234,7 @@ impl<'a> PartialOrd for MownStr<'a> {
 
 impl<'a> Ord for MownStr<'a> {
     fn cmp(&self, other: &MownStr<'a>) -> std::cmp::Ordering {
-        self.deref().cmp(other.deref())
+        self.deref().cmp(&**other)
     }
 }
 
@@ -234,7 +242,7 @@ impl<'a> Ord for MownStr<'a> {
 
 impl<'a> PartialEq<&'a str> for MownStr<'a> {
     fn eq(&self, other: &&'a str) -> bool {
-        self.deref() == *other
+        &**self == *other
     }
 }
 
@@ -246,13 +254,13 @@ impl<'a> PartialOrd<&'a str> for MownStr<'a> {
 
 impl<'a> PartialEq<MownStr<'a>> for &'a str {
     fn eq(&self, other: &MownStr<'a>) -> bool {
-        self == &other.deref()
+        self == &&**other
     }
 }
 
 impl<'a> PartialOrd<MownStr<'a>> for &'a str {
     fn partial_cmp(&self, other: &MownStr<'a>) -> Option<std::cmp::Ordering> {
-        self.partial_cmp(&other.deref())
+        self.partial_cmp(&&**other)
     }
 }
 
@@ -260,13 +268,13 @@ impl<'a> PartialOrd<MownStr<'a>> for &'a str {
 
 impl<'a> fmt::Debug for MownStr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(self.deref(), f)
+        fmt::Debug::fmt(&**self, f)
     }
 }
 
 impl<'a> fmt::Display for MownStr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self.deref(), f)
+        fmt::Display::fmt(&**self, f)
     }
 }
 
@@ -311,6 +319,7 @@ impl<'a> MownStr<'a> {
     /// let o1 = Some(MownStr::from("hi there"));
     /// let o2 = o1.map(MownStr::to::<Rc<str>>);
     /// ```
+    #[must_use]
     pub fn to<T>(mut self) -> T
     where
         T: From<&'a str> + From<Box<str>>,
@@ -348,7 +357,7 @@ mod test {
 
     #[test]
     fn empty_string() {
-        let empty = "".to_string();
+        let empty = String::new();
         let _ = MownStr::from(empty);
     }
 
