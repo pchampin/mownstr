@@ -329,8 +329,6 @@ mod test {
     use super::MownStr;
     use std::borrow::Cow;
     use std::collections::HashSet;
-    use std::fs;
-    use std::str::FromStr;
 
     #[test]
     fn size() {
@@ -485,6 +483,18 @@ mod test {
     #[cfg(target_os = "linux")]
     #[test]
     fn no_memory_leak() {
+        const CAP: usize = 100_000_000;
+
+        fn get_rss_anon() -> usize {
+            if cfg!(miri) {
+                return 0; // return dummy value, as miri can not open files
+            }
+            let txt = std::fs::read_to_string("/proc/self/status").expect("read proc status");
+            let txt = txt.split("RssAnon:").nth(1).unwrap();
+            let txt = txt.split(" kB").next().unwrap();
+            let txt = txt.trim();
+            txt.parse().unwrap()
+        }
         // performs several MownStr allocation in sequence,
         // dropping each one before allocating the next one
         // (unless the v.pop() line below is commented out).
@@ -517,18 +527,5 @@ mod test {
         let increase = (m1 - m0) as f64 / (CAP / 1000) as f64;
         println!("increase = {}", increase);
         assert!(increase < 1.5);
-    }
-
-    const CAP: usize = 100_000_000;
-
-    fn get_rss_anon() -> usize {
-        if cfg!(miri) {
-            return 0; // return dummy value, as miri can not open files
-        }
-        let txt = fs::read_to_string("/proc/self/status").expect("read proc status");
-        let txt = txt.split("RssAnon:").nth(1).unwrap();
-        let txt = txt.split(" kB").next().unwrap();
-        let txt = txt.trim();
-        usize::from_str(txt).unwrap()
     }
 }
