@@ -466,10 +466,10 @@ mod test {
     fn display() {
         let mown1: MownStr = "hello".into();
         let mown2: MownStr = "hello".to_string().into();
-        assert_eq!(format!("{:?}", mown1), "\"hello\"");
-        assert_eq!(format!("{:?}", mown2), "\"hello\"");
-        assert_eq!(format!("{}", mown1), "hello");
-        assert_eq!(format!("{}", mown2), "hello");
+        assert_eq!(format!("{mown1:?}"), "\"hello\"");
+        assert_eq!(format!("{mown2:?}"), "\"hello\"");
+        assert_eq!(format!("{mown1}"), "hello");
+        assert_eq!(format!("{mown2}"), "hello");
     }
 
     #[test]
