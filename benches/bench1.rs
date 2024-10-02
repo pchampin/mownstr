@@ -1,6 +1,6 @@
 //! This benchmark is used to compare the time it takes to create
-//! * borrowing MownStr's vs. standard &str references
-//! * owning MownStr's vs. Strings
+//! * borrowing `MownStr`'s vs. standard &str references
+//! * owning `MownStr`'s vs. Strings
 //!
 //! The results of `borrowed_mownstr` should therefore be compared to `refs`,
 //! and that of `owned_mownstr` should be compared to `strings`.
@@ -18,8 +18,8 @@ fn refs(c: &mut Criterion) {
                 // strangely, replacing .iter().cloned().collect() by to_vec(),
                 // as suggested by clippy, causes this test to crash :-/
                 #[allow(clippy::needless_collect)]
-                let v = i.iter().cloned().collect::<Vec<_>>();
-                assert!(v.len() == i.len())
+                let v = i.iter().copied().collect::<Vec<_>>();
+                assert!(v.len() == i.len());
             });
         },
     );
@@ -33,7 +33,7 @@ fn borrowed_mownstr(c: &mut Criterion) {
             b.iter(|| {
                 #[allow(clippy::needless_collect)]
                 let v = i.iter().map(|r| MownStr::from(*r)).collect::<Vec<_>>();
-                assert!(v.len() == i.len())
+                assert!(v.len() == i.len());
             });
         },
     );
@@ -48,10 +48,10 @@ fn strings(c: &mut Criterion) {
                 #[allow(clippy::needless_collect)]
                 let v = i
                     .iter()
-                    .map(|r| r.to_string())
+                    .map(|r| (*r).to_string())
                     .map(String::into_boxed_str)
                     .collect::<Vec<_>>();
-                assert!(v.len() == i.len())
+                assert!(v.len() == i.len());
             });
         },
     );
@@ -66,10 +66,10 @@ fn owned_mownstr(c: &mut Criterion) {
                 #[allow(clippy::needless_collect)]
                 let v = i
                     .iter()
-                    .map(|r| r.to_string())
+                    .map(|r| (*r).to_string())
                     .map(MownStr::from)
                     .collect::<Vec<_>>();
-                assert!(v.len() == i.len())
+                assert!(v.len() == i.len());
             });
         },
     );
