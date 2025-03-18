@@ -12,7 +12,7 @@ jobs:
         with:
           components: rustfmt,clippy
       - run: cargo fmt -- --check
-      - run: cargo clippy --all-targets
+      - run: cargo clippy --all-targets --all-features
 
   test:
     runs-on: ubuntu-latest
