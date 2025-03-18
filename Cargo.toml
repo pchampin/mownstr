@@ -8,15 +8,19 @@ repository = "https://github.com/pchampin/mownstr"
 documentation = "https://docs.rs/mownstr"
 readme = "./README.md"
 license = "CECILL-B"
-keywords = ["string", "wrapper", "semantic-web"]
+keywords = ["string", "wrapper"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+criterion = { version="0.4", optional=true }
 
-[dev-dependencies]
-criterion = "0.4"
+[features]
+bench = [ "criterion" ]
 
 [[bench]]
 name = "bench1"
 harness = false
+
+[package.metadata.cargo-bench]
+#required-features = ["bench"]

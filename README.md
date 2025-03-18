@@ -13,14 +13,21 @@ Contrarily to other types (such as for example [`Cow<str>`]),
 which allows it to be fast and lean.
 
 Actually, a `MownStr` takes no more memory than a regular `&str` or `Box<str>`,
-and has a minimal runtime overhead.
+and has a little runtime overhead.
 The drawback is that the maximum size of a `MownStr`
 is half the size of a regular `str`
 (which is still 8EiB on a 64-bit architectures...).
 
 [`Cow<str>`]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
 
-Supported Rust version
-----------------------
+### Benchmark
 
-This crate targets the stable channel of `rustc` and `cargo`. I do not aim for compatibility with older versions, so new releases of `mownstr` may require you to upgrade your Rust toolchain.
+To run the benchmark, you need the feature `bench`:
+
+```
+cargo bench --features bench
+```
+
+### Supported Rust version
+
+This crate is tested with Rust 1.67 and with the latest stable release.

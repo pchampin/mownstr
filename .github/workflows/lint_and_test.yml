@@ -24,6 +24,16 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
+  test-old:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.67
+      - run: cargo build
+      - run: cargo test --verbose --all
+        env:
+          RUST_BACKTRACE: 1
+
   miri-test:
     runs-on: ubuntu-latest
     steps:
