@@ -117,7 +117,7 @@ impl<'a> MownStr<'a> {
     }
 }
 
-impl<'a> Drop for MownStr<'a> {
+impl Drop for MownStr<'_> {
     fn drop(&mut self) {
         if self.is_owned() {
             unsafe {
@@ -127,7 +127,7 @@ impl<'a> Drop for MownStr<'a> {
     }
 }
 
-impl<'a> Clone for MownStr<'a> {
+impl Clone for MownStr<'_> {
     fn clone(&self) -> Self {
         if self.is_owned() {
             Box::<str>::from(&**self).into()
@@ -149,7 +149,7 @@ impl<'a> From<&'a str> for MownStr<'a> {
     }
 }
 
-impl<'a> From<Box<str>> for MownStr<'a> {
+impl From<Box<str>> for MownStr<'_> {
     fn from(other: Box<str>) -> Self {
         let len = other.len();
         assert!(len <= LEN_MASK);
@@ -168,7 +168,7 @@ impl<'a> From<Box<str>> for MownStr<'a> {
     }
 }
 
-impl<'a> From<String> for MownStr<'a> {
+impl From<String> for MownStr<'_> {
     fn from(other: String) -> Self {
         other.into_boxed_str().into()
     }
@@ -185,7 +185,7 @@ impl<'a> From<Cow<'a, str>> for MownStr<'a> {
 
 // Using a MownStr as a str
 
-impl<'a> Deref for MownStr<'a> {
+impl Deref for MownStr<'_> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -198,13 +198,13 @@ impl<'a> Deref for MownStr<'a> {
     }
 }
 
-impl<'a> AsRef<str> for MownStr<'a> {
+impl AsRef<str> for MownStr<'_> {
     fn as_ref(&self) -> &str {
         self
     }
 }
 
-impl<'a> std::borrow::Borrow<str> for MownStr<'a> {
+impl std::borrow::Borrow<str> for MownStr<'_> {
     fn borrow(&self) -> &str {
         self
     }
@@ -212,27 +212,27 @@ impl<'a> std::borrow::Borrow<str> for MownStr<'a> {
 
 // Comparing between MownStr
 
-impl<'a> hash::Hash for MownStr<'a> {
+impl hash::Hash for MownStr<'_> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.deref().hash(state);
     }
 }
 
-impl<'a> PartialEq for MownStr<'a> {
+impl PartialEq for MownStr<'_> {
     fn eq(&self, other: &Self) -> bool {
         **self == **other
     }
 }
 
-impl<'a> Eq for MownStr<'a> {}
+impl Eq for MownStr<'_> {}
 
-impl<'a> PartialOrd for MownStr<'a> {
+impl PartialOrd for MownStr<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a> Ord for MownStr<'a> {
+impl Ord for MownStr<'_> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.deref().cmp(&**other)
     }
@@ -266,13 +266,13 @@ impl<'a> PartialOrd<MownStr<'a>> for &'a str {
 
 // Formatting
 
-impl<'a> fmt::Debug for MownStr<'a> {
+impl fmt::Debug for MownStr<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)
     }
 }
 
-impl<'a> fmt::Display for MownStr<'a> {
+impl fmt::Display for MownStr<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&**self, f)
     }
