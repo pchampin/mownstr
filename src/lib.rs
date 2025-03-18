@@ -19,7 +19,8 @@ use std::str;
 /// # Panic
 /// The drawback is that `MownStr`
 /// does not support strings with a length > `usize::MAX/2`.
-/// Trying to convert such a large string to a `MownStr` will panic.
+/// Trying to convert such a large string to a `MownStr` would lead to a memory leak
+/// (but is extremely unlikely in practice anyway).
 pub struct MownStr<'a> {
     addr: NonNull<u8>,
     xlen: usize,
@@ -46,7 +47,7 @@ impl<'a> MownStr<'a> {
 
     #[must_use]
     pub const fn from_ref(other: &'a str) -> Self {
-        assert!(other.len() <= LEN_MASK);
+        debug_assert!(other.len() <= LEN_MASK);
         // NB: The only 'const' constructor for NonNull is new_unchecked
         // so we need an unsafe block.
 
@@ -152,7 +153,7 @@ impl<'a> From<&'a str> for MownStr<'a> {
 impl From<Box<str>> for MownStr<'_> {
     fn from(other: Box<str>) -> Self {
         let len = other.len();
-        assert!(len <= LEN_MASK);
+        debug_assert!(len <= LEN_MASK);
         let addr = Box::leak(other).as_mut_ptr();
         let addr = unsafe {
             // SAFETY: ptr can not be null,
