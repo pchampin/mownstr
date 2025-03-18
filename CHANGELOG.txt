@@ -1,3 +1,8 @@
+0.3.1
+    Optimistic optimization:
+    do not test the length of the str when constructing a MownStr
+    (in release mode -- debug mode still tests it).
+
 0.3.0
     Remove undefined beheviour detected by @mkatychev with miri.
     Other code clean-up.
